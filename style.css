@@ -1,0 +1,15 @@
+body {
+    background: black;
+    color: white;
+    text-align: center;
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+canvas {
+    margin: auto;
+    display: block;
+    background: black;
+    border: 2px solid #222;
+}
