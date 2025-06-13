@@ -1,0 +1,119 @@
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const tileSize = 20;
+const width = canvas.width;
+const height = canvas.height;
+const cols = Math.floor(width / tileSize);
+const rows = Math.floor(height / tileSize);
+
+// 0 - empty, 1 - wall, 2 - dot
+const level = [
+  "1111111111111111111111111111",
+  "1000000000000000000000000001",
+  "1011111110111111101111111101",
+  "1020000010100000101000000201",
+  "1011111010111110101111101101",
+  "1000000010000100100000000001",
+  "1110111011110101111011101111",
+  "0000100000000000000000100000",
+  "1110111011111111111011101111",
+  "1000000010000100100000000001",
+  "1011111010111110101111101101",
+  "1020000010100000101000000201",
+  "1011111110111111101111111101",
+  "1000000000000000000000000001",
+  "1111111111111111111111111111"
+];
+
+let pacman = { x: 1, y: 1, dir: { x: 0, y: 0 } };
+let ghost = { x: cols - 2, y: rows - 2, dir: { x: 0, y: -1 } };
+let score = 0;
+
+function draw() {
+  ctx.clearRect(0, 0, width, height);
+
+  // Draw level
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const cell = level[y][x];
+      if (cell === '1') {
+        ctx.fillStyle = '#0031ff';
+        ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+      } else if (cell === '0' || cell === '2') {
+        ctx.fillStyle = 'black';
+        ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+        if (cell === '2') {
+          ctx.fillStyle = 'white';
+          ctx.beginPath();
+          ctx.arc(x * tileSize + tileSize / 2, y * tileSize + tileSize / 2, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  // Draw pacman
+  ctx.fillStyle = 'yellow';
+  ctx.beginPath();
+  ctx.arc(pacman.x * tileSize + tileSize / 2, pacman.y * tileSize + tileSize / 2, tileSize / 2 - 2, 0.25 * Math.PI, 1.75 * Math.PI);
+  ctx.lineTo(pacman.x * tileSize + tileSize / 2, pacman.y * tileSize + tileSize / 2);
+  ctx.fill();
+
+  // Draw ghost
+  ctx.fillStyle = 'red';
+  ctx.fillRect(ghost.x * tileSize + 2, ghost.y * tileSize + 2, tileSize - 4, tileSize - 4);
+}
+
+function move(entity) {
+  const nextX = entity.x + entity.dir.x;
+  const nextY = entity.y + entity.dir.y;
+  if (level[nextY][nextX] !== '1') {
+    entity.x = nextX;
+    entity.y = nextY;
+  } else {
+    entity.dir = { x: 0, y: 0 };
+  }
+}
+
+function update() {
+  move(pacman);
+  move(ghost);
+
+  // Check dot collision
+  if (level[pacman.y][pacman.x] === '2') {
+    const row = level[pacman.y].split('');
+    row[pacman.x] = '0';
+    level[pacman.y] = row.join('');
+    score += 10;
+  }
+
+  // Ghost AI: random at intersections
+  if (Math.random() < 0.1) {
+    const dirs = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 }
+    ];
+    ghost.dir = dirs[Math.floor(Math.random() * dirs.length)];
+  }
+
+  // Check game over
+  if (pacman.x === ghost.x && pacman.y === ghost.y) {
+    alert('Game Over! Score: ' + score);
+    document.location.reload();
+  }
+
+  draw();
+  requestAnimationFrame(update);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') pacman.dir = { x: -1, y: 0 };
+  else if (e.key === 'ArrowRight') pacman.dir = { x: 1, y: 0 };
+  else if (e.key === 'ArrowUp') pacman.dir = { x: 0, y: -1 };
+  else if (e.key === 'ArrowDown') pacman.dir = { x: 0, y: 1 };
+});
+
+draw();
+requestAnimationFrame(update);
