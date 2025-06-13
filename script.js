@@ -4,6 +4,7 @@ const tileSize = 20;
 
 // 0 - empty, 1 - wall (dots will be added dynamically)
 const levelLayout = [
+
   "1111111111111111111111111111",
   "1000000000000000000000000001",
   "1011111110111111101111111101",
@@ -20,6 +21,7 @@ const levelLayout = [
   "1000000000000000000000000001",
   "1111111111111111111111111111"
 ];
+
 
 // Convert level layout to a mutable 2D array
 let level = levelLayout.map(row => row.split(''));
@@ -40,6 +42,7 @@ for (let y = 0; y < rows; y++) {
 let pacman = { x: 1, y: 1, dir: { x: 0, y: 0 } };
 let ghost = { x: cols - 2, y: rows - 2, dir: { x: 0, y: -1 } };
 let score = 0;
+
 
 // Clear dots at starting positions
 level[pacman.y][pacman.x] = '0';
@@ -97,7 +100,9 @@ function update() {
 
   // Check dot collision
   if (level[pacman.y][pacman.x] === '2') {
+
     level[pacman.y][pacman.x] = '0';
+
     score += 10;
   }
 
