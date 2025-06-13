@@ -1,13 +1,10 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const tileSize = 20;
-const width = canvas.width;
-const height = canvas.height;
-const cols = Math.floor(width / tileSize);
-const rows = Math.floor(height / tileSize);
 
-// 0 - empty, 1 - wall, 2 - dot
-const level = [
+// 0 - empty, 1 - wall (dots will be added dynamically)
+const levelLayout = [
+
   "1111111111111111111111111111",
   "1000000000000000000000000001",
   "1011111110111111101111111101",
@@ -25,9 +22,31 @@ const level = [
   "1111111111111111111111111111"
 ];
 
+
+// Convert level layout to a mutable 2D array
+let level = levelLayout.map(row => row.split(''));
+const rows = level.length;
+const cols = level[0].length;
+canvas.width = cols * tileSize;
+canvas.height = rows * tileSize;
+const width = canvas.width;
+const height = canvas.height;
+
+// Fill all empty spaces with dots
+for (let y = 0; y < rows; y++) {
+  for (let x = 0; x < cols; x++) {
+    if (level[y][x] !== '1') level[y][x] = '2';
+  }
+}
+
 let pacman = { x: 1, y: 1, dir: { x: 0, y: 0 } };
 let ghost = { x: cols - 2, y: rows - 2, dir: { x: 0, y: -1 } };
 let score = 0;
+
+
+// Clear dots at starting positions
+level[pacman.y][pacman.x] = '0';
+level[ghost.y][ghost.x] = '0';
 
 function draw() {
   ctx.clearRect(0, 0, width, height);
@@ -81,9 +100,9 @@ function update() {
 
   // Check dot collision
   if (level[pacman.y][pacman.x] === '2') {
-    const row = level[pacman.y].split('');
-    row[pacman.x] = '0';
-    level[pacman.y] = row.join('');
+
+    level[pacman.y][pacman.x] = '0';
+
     score += 10;
   }
 
