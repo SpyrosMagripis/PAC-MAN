@@ -199,14 +199,14 @@ function move(entity) {
   if (entity.dir.x !== 0) { // Moving horizontally
     if (nextX < 0) {
       // Moving off left edge - check if current row allows teleportation
-      if (nextY >= 0 && nextY < rows && level[nextY][0] !== '1') {
+      if (entity.y >= 0 && entity.y < rows && level[entity.y][0] !== '1') {
         entity.x = cols - 1; // Teleport to right edge
         entity.y = nextY;
         return;
       }
     } else if (nextX >= cols) {
       // Moving off right edge - check if current row allows teleportation
-      if (nextY >= 0 && nextY < rows && level[nextY][cols - 1] !== '1') {
+      if (entity.y >= 0 && entity.y < rows && level[entity.y][cols - 1] !== '1') {
         entity.x = 0; // Teleport to left edge
         entity.y = nextY;
         return;
