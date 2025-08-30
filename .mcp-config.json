@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/runner/work/PAC-MAN/PAC-MAN"],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    "git": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-git", "--repository", "/home/runner/work/PAC-MAN/PAC-MAN"]
+    },
+    "web-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-web-search"]
+    }
+  },
+  "globalShortcut": "Ctrl+Shift+M"
+}
