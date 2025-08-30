@@ -201,14 +201,14 @@ function move(entity) {
       // Moving off left edge - check if current row allows teleportation
       if (entity.y >= 0 && entity.y < rows && level[entity.y][0] !== '1') {
         entity.x = cols - 1; // Teleport to right edge
-        entity.y = nextY;
+        // entity.y remains unchanged during horizontal teleportation
         return;
       }
     } else if (nextX >= cols) {
       // Moving off right edge - check if current row allows teleportation
       if (entity.y >= 0 && entity.y < rows && level[entity.y][cols - 1] !== '1') {
         entity.x = 0; // Teleport to left edge
-        entity.y = nextY;
+        // entity.y remains unchanged during horizontal teleportation
         return;
       }
     }
