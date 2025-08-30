@@ -1,10 +1,28 @@
+/**
+ * PAC-MAN Game - Canvas-based implementation
+ * 
+ * Game Architecture:
+ * - Grid-based movement system using 2D array representation
+ * - Fixed timestep game loop with requestAnimationFrame
+ * - Entity-based design for PAC-MAN and ghost characters
+ * - Simple collision detection using array bounds checking
+ */
+
+// Canvas setup and rendering context
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const tileSize = 20;
+const tileSize = 20; // Size of each grid tile in pixels
 
-// 0 - empty, 1 - wall (dots will be added dynamically)
+/**
+ * Level Layout Definition
+ * Legend: 
+ * - '0' = empty space (will be filled with dots)
+ * - '1' = wall (collision boundary)
+ * - '2' = dot (collectible item, added dynamically)
+ * 
+ * Design Note: Uses string arrays for easy visual level editing
+ */
 const levelLayout = [
-
   "1111111111111111111111111111",
   "1000000000000000000000000001",
   "1011111110111111101111111101",
@@ -22,148 +40,276 @@ const levelLayout = [
   "1111111111111111111111111111"
 ];
 
-
+/**
+ * Game World Initialization
+ * Converts string-based level layout to mutable 2D array for runtime manipulation
+ */
 // Convert level layout to a mutable 2D array
 let level = levelLayout.map(row => row.split(''));
 const rows = level.length;
 const cols = level[0].length;
+
+// Set canvas dimensions based on level size
 canvas.width = cols * tileSize;
 canvas.height = rows * tileSize;
 const width = canvas.width;
 const height = canvas.height;
 
-// Fill all empty spaces with dots
+/**
+ * Dynamic Dot Placement
+ * Fills all empty spaces (non-wall tiles) with collectible dots
+ * This allows level design to focus on walls, with dots added automatically
+ */
 for (let y = 0; y < rows; y++) {
   for (let x = 0; x < cols; x++) {
-    if (level[y][x] !== '1') level[y][x] = '2';
+    if (level[y][x] !== '1') level[y][x] = '2'; // Place dot if not a wall
   }
 }
 
-let pacman = { x: 1, y: 1, dir: { x: 0, y: 0 } };
-let ghost = { x: cols - 2, y: rows - 2, dir: { x: 0, y: -1 } };
+/**
+ * Game Entity Definitions
+ * Uses object-based entities with position and direction vectors
+ * Direction vectors: {x: 1, y: 0} = right, {x: -1, y: 0} = left, etc.
+ */
+let pacman = { 
+  x: 1, 
+  y: 1, 
+  dir: { x: 0, y: 0 } // Initially stationary
+};
+
+let ghost = { 
+  x: cols - 2, 
+  y: rows - 2, 
+  dir: { x: 0, y: -1 } // Initially moving up
+};
+
+// Game state variables
 let score = 0;
 let lastTime = 0;
-const GAME_SPEED = 150; // milliseconds between moves
+const GAME_SPEED = 150; // milliseconds between moves (controls game difficulty)
 
-
-// Clear dots at starting positions
+/**
+ * Clear Starting Positions
+ * Remove dots from entity starting positions to prevent immediate collection
+ */
 level[pacman.y][pacman.x] = '0';
 level[ghost.y][ghost.x] = '0';
 
+/**
+ * Main Rendering Function
+ * Draws all game elements in proper order: level → entities → UI
+ * Uses double buffering via clearRect for smooth animation
+ */
 function draw() {
+  // Clear entire canvas for fresh frame
   ctx.clearRect(0, 0, width, height);
 
-  // Draw level
+  /**
+   * Level Rendering Pass
+   * Iterates through 2D level array and draws walls, empty spaces, and dots
+   */
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       const cell = level[y][x];
+      
+      // Draw walls with blue color
       if (cell === '1') {
         ctx.fillStyle = '#0031ff';
         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-      } else if (cell === '0' || cell === '2') {
+      } 
+      // Draw empty spaces and dots with black background
+      else if (cell === '0' || cell === '2') {
         ctx.fillStyle = 'black';
         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+        
+        // Draw collectible dots as small white circles
         if (cell === '2') {
           ctx.fillStyle = 'white';
           ctx.beginPath();
-          ctx.arc(x * tileSize + tileSize / 2, y * tileSize + tileSize / 2, 3, 0, Math.PI * 2);
+          ctx.arc(
+            x * tileSize + tileSize / 2, 
+            y * tileSize + tileSize / 2, 
+            3, 0, Math.PI * 2
+          );
           ctx.fill();
         }
       }
     }
   }
 
-  // Draw pacman
+  /**
+   * Entity Rendering Pass
+   * Draws PAC-MAN and ghost characters on top of level geometry
+   */
+  // Draw PAC-MAN as yellow pac-man shape with mouth opening
   ctx.fillStyle = 'yellow';
   ctx.beginPath();
-  ctx.arc(pacman.x * tileSize + tileSize / 2, pacman.y * tileSize + tileSize / 2, tileSize / 2 - 2, 0.25 * Math.PI, 1.75 * Math.PI);
+  ctx.arc(
+    pacman.x * tileSize + tileSize / 2, 
+    pacman.y * tileSize + tileSize / 2, 
+    tileSize / 2 - 2, 
+    0.25 * Math.PI, 1.75 * Math.PI // Creates pac-man mouth opening
+  );
   ctx.lineTo(pacman.x * tileSize + tileSize / 2, pacman.y * tileSize + tileSize / 2);
   ctx.fill();
 
-  // Draw ghost
+  // Draw ghost as simple red rectangle
   ctx.fillStyle = 'red';
-  ctx.fillRect(ghost.x * tileSize + 2, ghost.y * tileSize + 2, tileSize - 4, tileSize - 4);
+  ctx.fillRect(
+    ghost.x * tileSize + 2, 
+    ghost.y * tileSize + 2, 
+    tileSize - 4, 
+    tileSize - 4
+  );
   
-  // Draw score
+  /**
+   * UI Rendering Pass
+   * Draws score and other interface elements on top of game world
+   */
   ctx.fillStyle = 'white';
   ctx.font = '20px Arial';
   ctx.fillText('Score: ' + score, 10, 25);
 }
 
+/**
+ * Universal Entity Movement Function
+ * Handles movement for any entity (PAC-MAN, ghost, future entities)
+ * Performs collision detection and boundary checking
+ * 
+ * @param {Object} entity - Entity object with x, y, and dir properties
+ */
 function move(entity) {
+  // Calculate next position based on current direction
   const nextX = entity.x + entity.dir.x;
   const nextY = entity.y + entity.dir.y;
   
-  // Check bounds and walls
-  if (nextY >= 0 && nextY < rows && nextX >= 0 && nextX < cols && level[nextY][nextX] !== '1') {
+  /**
+   * Collision Detection & Boundary Checking
+   * Validates next position is within bounds and not a wall
+   * If invalid, stops entity movement by setting direction to zero
+   */
+  if (nextY >= 0 && nextY < rows && 
+      nextX >= 0 && nextX < cols && 
+      level[nextY][nextX] !== '1') {
+    // Valid move: update entity position
     entity.x = nextX;
     entity.y = nextY;
   } else {
+    // Invalid move: stop entity movement
     entity.dir = { x: 0, y: 0 };
   }
 }
 
+/**
+ * Main Game Loop Update Function
+ * Fixed timestep game loop that runs at consistent intervals
+ * Handles game logic updates, collision detection, and win/lose conditions
+ * 
+ * @param {number} currentTime - Timestamp from requestAnimationFrame
+ */
 function update(currentTime) {
+  // Throttle updates to fixed timestep based on GAME_SPEED
   if (currentTime - lastTime >= GAME_SPEED) {
+    /**
+     * Entity Movement Phase
+     * Move all entities based on their current direction vectors
+     */
     move(pacman);
     move(ghost);
 
-    // Check dot collision
+    /**
+     * Dot Collection Logic
+     * Check if PAC-MAN is on a dot tile and handle collection
+     */
     if (level[pacman.y][pacman.x] === '2') {
-      level[pacman.y][pacman.x] = '0';
-      score += 10;
+      level[pacman.y][pacman.x] = '0'; // Remove dot from level
+      score += 10; // Award points
       
-      // Check win condition
+      /**
+       * Win Condition Check
+       * Count remaining dots and trigger win state if all collected
+       * Performance note: Could be optimized by tracking dot count instead of scanning
+       */
       let dotsRemaining = 0;
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           if (level[y][x] === '2') dotsRemaining++;
         }
       }
+      
       if (dotsRemaining === 0) {
         alert('You Win! Final Score: ' + score);
-        document.location.reload();
+        document.location.reload(); // Reset game for replay
       }
     }
 
-    // Ghost AI: random at intersections, but avoid walls
+    /**
+     * Ghost AI System
+     * Simple random direction changes with wall avoidance
+     * 10% chance per frame to change direction (creates unpredictable movement)
+     */
     if (Math.random() < 0.1) {
+      // All possible movement directions
       const dirs = [
-        { x: 1, y: 0 },
-        { x: -1, y: 0 },
-        { x: 0, y: 1 },
-        { x: 0, y: -1 }
+        { x: 1, y: 0 },   // Right
+        { x: -1, y: 0 },  // Left
+        { x: 0, y: 1 },   // Down
+        { x: 0, y: -1 }   // Up
       ];
-      // Filter out directions that would hit walls
+      
+      /**
+       * AI Collision Avoidance
+       * Filter out directions that would result in wall collision
+       * Ensures ghost never gets stuck in walls
+       */
       const validDirs = dirs.filter(dir => {
         const nextX = ghost.x + dir.x;
         const nextY = ghost.y + dir.y;
-        return nextY >= 0 && nextY < rows && nextX >= 0 && nextX < cols && level[nextY][nextX] !== '1';
+        return nextY >= 0 && nextY < rows && 
+               nextX >= 0 && nextX < cols && 
+               level[nextY][nextX] !== '1';
       });
+      
+      // Randomly select from valid directions
       if (validDirs.length > 0) {
         ghost.dir = validDirs[Math.floor(Math.random() * validDirs.length)];
       }
     }
 
-    // Check game over
+    /**
+     * Game Over Collision Detection
+     * Check if PAC-MAN and ghost occupy the same grid position
+     */
     if (pacman.x === ghost.x && pacman.y === ghost.y) {
       alert('Game Over! Score: ' + score);
-      document.location.reload();
+      document.location.reload(); // Reset game for replay
     }
 
+    // Update timing for next frame
     lastTime = currentTime;
   }
 
+  // Render current frame and schedule next update
   draw();
   requestAnimationFrame(update);
 }
 
+/**
+ * Input Handling System
+ * Maps keyboard arrow keys to PAC-MAN movement direction vectors
+ * Immediate response - no buffering or delay
+ */
 document.addEventListener('keydown', (e) => {
+  // Map arrow keys to direction vectors for immediate movement
   if (e.key === 'ArrowLeft') pacman.dir = { x: -1, y: 0 };
   else if (e.key === 'ArrowRight') pacman.dir = { x: 1, y: 0 };
   else if (e.key === 'ArrowUp') pacman.dir = { x: 0, y: -1 };
   else if (e.key === 'ArrowDown') pacman.dir = { x: 0, y: 1 };
 });
 
-draw();
-requestAnimationFrame(update);
+/**
+ * Game Initialization
+ * Draw initial frame and start the game loop
+ */
+draw(); // Render initial game state
+requestAnimationFrame(update); // Start main game loop

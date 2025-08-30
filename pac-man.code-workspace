@@ -1,0 +1,37 @@
+{
+  "folders": [
+    {
+      "name": "PAC-MAN Game",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "files.associations": {
+      "*.js": "javascript",
+      "*.html": "html",
+      "*.css": "css",
+      "*.md": "markdown"
+    },
+    "emmet.includeLanguages": {
+      "javascript": "javascriptreact"
+    },
+    "javascript.suggest.autoImports": true,
+    "javascript.preferences.includePackageJsonAutoImports": "on",
+    "typescript.preferences.includePackageJsonAutoImports": "on"
+  },
+  "extensions": {
+    "recommendations": [
+      "github.copilot",
+      "github.copilot-chat",
+      "ritwickdey.liveserver",
+      "ms-vscode.vscode-typescript-next",
+      "esbenp.prettier-vscode",
+      "formulahendry.auto-rename-tag",
+      "christian-kohler.path-intellisense",
+      "yzhang.markdown-all-in-one"
+    ]
+  }
+}
