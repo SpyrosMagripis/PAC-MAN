@@ -42,6 +42,8 @@ for (let y = 0; y < rows; y++) {
 let pacman = { x: 1, y: 1, dir: { x: 0, y: 0 } };
 let ghost = { x: cols - 2, y: rows - 2, dir: { x: 0, y: -1 } };
 let score = 0;
+let lastTime = 0;
+const GAME_SPEED = 150; // milliseconds between moves
 
 
 // Clear dots at starting positions
@@ -81,12 +83,19 @@ function draw() {
   // Draw ghost
   ctx.fillStyle = 'red';
   ctx.fillRect(ghost.x * tileSize + 2, ghost.y * tileSize + 2, tileSize - 4, tileSize - 4);
+  
+  // Draw score
+  ctx.fillStyle = 'white';
+  ctx.font = '20px Arial';
+  ctx.fillText('Score: ' + score, 10, 25);
 }
 
 function move(entity) {
   const nextX = entity.x + entity.dir.x;
   const nextY = entity.y + entity.dir.y;
-  if (level[nextY][nextX] !== '1') {
+  
+  // Check bounds and walls
+  if (nextY >= 0 && nextY < rows && nextX >= 0 && nextX < cols && level[nextY][nextX] !== '1') {
     entity.x = nextX;
     entity.y = nextY;
   } else {
@@ -94,33 +103,55 @@ function move(entity) {
   }
 }
 
-function update() {
-  move(pacman);
-  move(ghost);
+function update(currentTime) {
+  if (currentTime - lastTime >= GAME_SPEED) {
+    move(pacman);
+    move(ghost);
 
-  // Check dot collision
-  if (level[pacman.y][pacman.x] === '2') {
+    // Check dot collision
+    if (level[pacman.y][pacman.x] === '2') {
+      level[pacman.y][pacman.x] = '0';
+      score += 10;
+      
+      // Check win condition
+      let dotsRemaining = 0;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (level[y][x] === '2') dotsRemaining++;
+        }
+      }
+      if (dotsRemaining === 0) {
+        alert('You Win! Final Score: ' + score);
+        document.location.reload();
+      }
+    }
 
-    level[pacman.y][pacman.x] = '0';
+    // Ghost AI: random at intersections, but avoid walls
+    if (Math.random() < 0.1) {
+      const dirs = [
+        { x: 1, y: 0 },
+        { x: -1, y: 0 },
+        { x: 0, y: 1 },
+        { x: 0, y: -1 }
+      ];
+      // Filter out directions that would hit walls
+      const validDirs = dirs.filter(dir => {
+        const nextX = ghost.x + dir.x;
+        const nextY = ghost.y + dir.y;
+        return nextY >= 0 && nextY < rows && nextX >= 0 && nextX < cols && level[nextY][nextX] !== '1';
+      });
+      if (validDirs.length > 0) {
+        ghost.dir = validDirs[Math.floor(Math.random() * validDirs.length)];
+      }
+    }
 
-    score += 10;
-  }
+    // Check game over
+    if (pacman.x === ghost.x && pacman.y === ghost.y) {
+      alert('Game Over! Score: ' + score);
+      document.location.reload();
+    }
 
-  // Ghost AI: random at intersections
-  if (Math.random() < 0.1) {
-    const dirs = [
-      { x: 1, y: 0 },
-      { x: -1, y: 0 },
-      { x: 0, y: 1 },
-      { x: 0, y: -1 }
-    ];
-    ghost.dir = dirs[Math.floor(Math.random() * dirs.length)];
-  }
-
-  // Check game over
-  if (pacman.x === ghost.x && pacman.y === ghost.y) {
-    alert('Game Over! Score: ' + score);
-    document.location.reload();
+    lastTime = currentTime;
   }
 
   draw();
