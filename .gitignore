@@ -1,8 +1,7 @@
-# Development Environment Configuration Files
-.vscode/
-.mcp-config.json
-jsconfig.json
-package.json
+# Note: Development configuration files (.vscode/, .mcp-config.json, jsconfig.json, package.json) 
+# are intentionally tracked to provide optimal Copilot experience
+
+# Build artifacts
 
 # Build artifacts
 dist/
