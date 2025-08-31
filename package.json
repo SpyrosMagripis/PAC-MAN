@@ -1,0 +1,43 @@
+{
+  "name": "pac-man-game",
+  "version": "1.0.0",
+  "description": "A classic PAC-MAN game implementation using HTML5 Canvas and vanilla JavaScript",
+  "main": "script.js",
+  "scripts": {
+    "start": "python3 -m http.server 3000",
+    "dev": "python3 -m http.server 3000",
+    "serve": "python3 -m http.server 8080",
+    "lint": "echo 'No linting configured for vanilla JS project'",
+    "test": "echo 'No tests configured yet'",
+    "build": "echo 'No build process needed for vanilla JS project'"
+  },
+  "keywords": [
+    "pacman",
+    "game",
+    "html5",
+    "canvas",
+    "javascript",
+    "browser-game",
+    "arcade"
+  ],
+  "author": "Spyros Magripis",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SpyrosMagripis/PAC-MAN.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SpyrosMagripis/PAC-MAN/issues"
+  },
+  "homepage": "https://github.com/SpyrosMagripis/PAC-MAN#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "browserslist": [
+    "last 2 versions",
+    "> 1%",
+    "not dead"
+  ],
+  "devDependencies": {},
+  "dependencies": {}
+}
