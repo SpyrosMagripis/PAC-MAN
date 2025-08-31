@@ -55,14 +55,55 @@ canvas.height = rows * tileSize;
 const width = canvas.width;
 const height = canvas.height;
 
-/**
- * Dynamic Dot Placement
- * Fills all empty spaces (non-wall tiles) with collectible dots
- * This allows level design to focus on walls, with dots added automatically
- */
+// Function to check if teleportation is possible on a row
+function canTeleportOnRow(y) {
+  return y >= 0 && y < rows && level[y][0] !== '1' && level[y][cols - 1] !== '1';
+}
+
+// Flood fill algorithm to find all reachable positions
+function floodFillReachable(startX, startY) {
+  const reachable = Array(rows).fill().map(() => Array(cols).fill(false));
+  const stack = [{x: startX, y: startY}];
+  
+  while (stack.length > 0) {
+    const {x, y} = stack.pop();
+    
+    // Skip if out of bounds, already visited, or a wall
+    if (y < 0 || y >= rows || x < 0 || x >= cols || reachable[y][x] || level[y][x] === '1') {
+      continue;
+    }
+    
+    reachable[y][x] = true;
+    
+    // Add adjacent cells
+    stack.push({x: x + 1, y: y});
+    stack.push({x: x - 1, y: y});
+    stack.push({x: x, y: y + 1});
+    stack.push({x: x, y: y - 1});
+    
+    // Handle teleportation - if we can teleport on this row
+    if (canTeleportOnRow(y)) {
+      if (x === 0) {
+        stack.push({x: cols - 1, y: y}); // Can reach right edge from left edge
+      }
+      if (x === cols - 1) {
+        stack.push({x: 0, y: y}); // Can reach left edge from right edge
+      }
+    }
+  }
+  
+  return reachable;
+}
+
+// Fill only reachable empty spaces with dots
+const reachableAreas = floodFillReachable(1, 1); // Start from Pac-Man's position
 for (let y = 0; y < rows; y++) {
   for (let x = 0; x < cols; x++) {
-    if (level[y][x] !== '1') level[y][x] = '2'; // Place dot if not a wall
+    if (level[y][x] !== '1' && reachableAreas[y][x]) {
+      level[y][x] = '2'; // Place dot only in reachable areas
+    } else if (level[y][x] !== '1') {
+      level[y][x] = '0'; // Make unreachable areas empty
+    }
   }
 }
 
@@ -153,14 +194,65 @@ function draw() {
   ctx.lineTo(pacman.x * tileSize + tileSize / 2, pacman.y * tileSize + tileSize / 2);
   ctx.fill();
 
-  // Draw ghost as simple red rectangle
+function drawGhost(x, y) {
+  const centerX = x * tileSize + tileSize / 2;
+  const centerY = y * tileSize + tileSize / 2;
+  const radius = tileSize / 2 - 2;
+  
   ctx.fillStyle = 'red';
-  ctx.fillRect(
-    ghost.x * tileSize + 2, 
-    ghost.y * tileSize + 2, 
-    tileSize - 4, 
-    tileSize - 4
-  );
+  
+  // Draw ghost body (rounded top, wavy bottom)
+  ctx.beginPath();
+  
+  // Top half circle
+  ctx.arc(centerX, centerY - 2, radius - 2, Math.PI, 0, false);
+  
+  // Side walls
+  ctx.lineTo(centerX + radius - 2, centerY + radius - 4);
+  
+  // Wavy bottom
+  const waveWidth = (radius - 2) * 2 / 3;
+  ctx.lineTo(centerX + waveWidth / 2, centerY + radius - 6);
+  ctx.lineTo(centerX, centerY + radius - 2);
+  ctx.lineTo(centerX - waveWidth / 2, centerY + radius - 6);
+  ctx.lineTo(centerX - radius + 2, centerY + radius - 4);
+  
+  ctx.closePath();
+  ctx.fill();
+  
+  // Draw eyes
+  ctx.fillStyle = 'white';
+  const eyeRadius = 2;
+  const eyeOffsetX = 4;
+  const eyeOffsetY = 3;
+  
+  // Left eye
+  ctx.beginPath();
+  ctx.arc(centerX - eyeOffsetX, centerY - eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Right eye
+  ctx.beginPath();
+  ctx.arc(centerX + eyeOffsetX, centerY - eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Eye pupils
+  ctx.fillStyle = 'black';
+  const pupilRadius = 1;
+  
+  // Left pupil
+  ctx.beginPath();
+  ctx.arc(centerX - eyeOffsetX, centerY - eyeOffsetY, pupilRadius, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Right pupil
+  ctx.beginPath();
+  ctx.arc(centerX + eyeOffsetX, centerY - eyeOffsetY, pupilRadius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+  // Draw ghost
+  drawGhost(ghost.x, ghost.y);
   
   /**
    * UI Rendering Pass
@@ -183,15 +275,27 @@ function move(entity) {
   const nextX = entity.x + entity.dir.x;
   const nextY = entity.y + entity.dir.y;
   
-  /**
-   * Collision Detection & Boundary Checking
-   * Validates next position is within bounds and not a wall
-   * If invalid, stops entity movement by setting direction to zero
-   */
-  if (nextY >= 0 && nextY < rows && 
-      nextX >= 0 && nextX < cols && 
-      level[nextY][nextX] !== '1') {
-    // Valid move: update entity position
+  // Handle horizontal teleportation
+  if (entity.dir.x !== 0) { // Moving horizontally
+    if (nextX < 0) {
+      // Moving off left edge - check if current row allows teleportation
+      if (entity.y >= 0 && entity.y < rows && level[entity.y][0] !== '1') {
+        entity.x = cols - 1; // Teleport to right edge
+        // entity.y remains unchanged during horizontal teleportation
+        return;
+      }
+    } else if (nextX >= cols) {
+      // Moving off right edge - check if current row allows teleportation
+      if (entity.y >= 0 && entity.y < rows && level[entity.y][cols - 1] !== '1') {
+        entity.x = 0; // Teleport to left edge
+        // entity.y remains unchanged during horizontal teleportation
+        return;
+      }
+    }
+  }
+  
+  // Check bounds and walls
+  if (nextY >= 0 && nextY < rows && nextX >= 0 && nextX < cols && level[nextY][nextX] !== '1') {
     entity.x = nextX;
     entity.y = nextY;
   } else {
