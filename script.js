@@ -6,6 +6,7 @@
  * - Fixed timestep game loop with requestAnimationFrame
  * - Entity-based design for PAC-MAN and ghost characters
  * - Simple collision detection using array bounds checking
+ * - Background music system with Web Audio API
  */
 
 // Canvas setup and rendering context
@@ -14,14 +15,79 @@ const ctx = canvas.getContext('2d');
 const tileSize = 20; // Size of each grid tile in pixels
 
 /**
- * Level Layout Definition
- * Legend: 
- * - '0' = empty space (will be filled with dots)
- * - '1' = wall (collision boundary)
- * - '2' = dot (collectible item, added dynamically)
- * 
- * Design Note: Uses string arrays for easy visual level editing
+ * Audio System - PAC-MAN Theme Music
+ * Uses HTML Audio element to play the authentic PAC-MAN theme music
  */
+class PacManAudio {
+  constructor() {
+    this.audio = null;
+    this.isPlaying = false;
+    this.isInitialized = false;
+  }
+
+  async init() {
+    try {
+      // Create audio element with the actual PAC-MAN theme music
+      this.audio = new Audio('playing-pac-man-6783.mp3');
+      this.audio.loop = true; // Enable continuous looping
+      this.audio.volume = 0.3; // Set moderate volume
+      
+      // Handle audio loading
+      return new Promise((resolve) => {
+        this.audio.addEventListener('canplaythrough', () => {
+          this.isInitialized = true;
+          resolve(true);
+        });
+        
+        this.audio.addEventListener('error', (e) => {
+          console.warn('Error loading PAC-MAN theme music:', e);
+          resolve(false);
+        });
+        
+        // Start loading the audio
+        this.audio.load();
+      });
+    } catch (error) {
+      console.warn('Audio not supported:', error);
+      return false;
+    }
+  }
+
+  async start() {
+    if (!this.audio || !this.isInitialized) return;
+    
+    try {
+      await this.audio.play();
+      this.isPlaying = true;
+    } catch (error) {
+      console.warn('Could not start audio playback:', error);
+      // Browser might require user interaction first
+      this.isPlaying = false;
+    }
+  }
+
+  stop() {
+    if (!this.audio) return;
+    
+    this.audio.pause();
+    this.audio.currentTime = 0; // Reset to beginning
+    this.isPlaying = false;
+  }
+
+  async toggle() {
+    if (this.isPlaying) {
+      this.stop();
+    } else {
+      await this.start();
+    }
+    return this.isPlaying;
+  }
+}
+
+// Initialize audio system
+const pacManAudio = new PacManAudio();
+
+// 0 - empty, 1 - wall (dots will be added dynamically)
 const levelLayout = [
   "1111111111111111111111111111",
   "1000000000000000000000000001",
@@ -412,8 +478,49 @@ document.addEventListener('keydown', (e) => {
 });
 
 /**
- * Game Initialization
- * Draw initial frame and start the game loop
+ * Music Toggle System
+ * Initialize audio and set up toggle button functionality
  */
-draw(); // Render initial game state
-requestAnimationFrame(update); // Start main game loop
+async function initializeAudio() {
+  const musicButton = document.getElementById('musicToggle');
+  let audioInitialized = false;
+  let isFirstClick = true;
+  
+  musicButton.addEventListener('click', async () => {
+    // Initialize audio on first user interaction (browser requirement)
+    if (!audioInitialized) {
+      audioInitialized = await pacManAudio.init();
+      
+      if (!audioInitialized) {
+        musicButton.textContent = '🔇 Audio Not Available';
+        musicButton.disabled = true;
+        return;
+      }
+    }
+    
+    // Handle the toggle
+    if (isFirstClick) {
+      // Start music on first click
+      await pacManAudio.start();
+      musicButton.textContent = '🎵 Music: ON';
+      musicButton.classList.remove('music-off');
+      isFirstClick = false;
+    } else {
+      // Toggle music on subsequent clicks
+      const isPlaying = await pacManAudio.toggle();
+      
+      if (isPlaying) {
+        musicButton.textContent = '🎵 Music: ON';
+        musicButton.classList.remove('music-off');
+      } else {
+        musicButton.textContent = '🔇 Music: OFF';
+        musicButton.classList.add('music-off');
+      }
+    }
+  });
+}
+
+// Initialize the game
+draw();
+initializeAudio();
+requestAnimationFrame(update);
