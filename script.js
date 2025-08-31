@@ -16,108 +16,69 @@ const tileSize = 20;
 
 /**
  * Audio System - PAC-MAN Theme Music
- * Uses Web Audio API to generate classic arcade-style sounds
+ * Uses HTML Audio element to play the authentic PAC-MAN theme music
  */
 class PacManAudio {
   constructor() {
-    this.audioContext = null;
-    this.oscillator = null;
-    this.gainNode = null;
+    this.audio = null;
     this.isPlaying = false;
-    this.currentNoteIndex = 0;
-    this.noteInterval = null;
-    
-    // Classic PAC-MAN intro theme melody (simplified)
-    // Notes based on the famous "PAC-MAN" jingle
-    this.melody = [
-      { freq: 659.25, duration: 200 }, // E5
-      { freq: 523.25, duration: 200 }, // C5
-      { freq: 659.25, duration: 200 }, // E5
-      { freq: 698.46, duration: 200 }, // F5
-      { freq: 783.99, duration: 400 }, // G5
-      { freq: 698.46, duration: 200 }, // F5
-      { freq: 659.25, duration: 400 }, // E5
-      { freq: 0, duration: 200 },      // Rest
-      { freq: 523.25, duration: 200 }, // C5
-      { freq: 587.33, duration: 200 }, // D5
-      { freq: 659.25, duration: 200 }, // E5
-      { freq: 698.46, duration: 200 }, // F5
-      { freq: 783.99, duration: 600 }, // G5
-      { freq: 0, duration: 400 },      // Rest
-    ];
+    this.isInitialized = false;
   }
 
   async init() {
     try {
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Create audio element with the actual PAC-MAN theme music
+      this.audio = new Audio('playing-pac-man-6783.mp3');
+      this.audio.loop = true; // Enable continuous looping
+      this.audio.volume = 0.3; // Set moderate volume
       
-      // Create gain node for volume control
-      this.gainNode = this.audioContext.createGain();
-      this.gainNode.connect(this.audioContext.destination);
-      this.gainNode.gain.value = 0.1; // Low volume
-      
-      return true;
+      // Handle audio loading
+      return new Promise((resolve) => {
+        this.audio.addEventListener('canplaythrough', () => {
+          this.isInitialized = true;
+          resolve(true);
+        });
+        
+        this.audio.addEventListener('error', (e) => {
+          console.warn('Error loading PAC-MAN theme music:', e);
+          resolve(false);
+        });
+        
+        // Start loading the audio
+        this.audio.load();
+      });
     } catch (error) {
-      console.warn('Web Audio API not supported:', error);
+      console.warn('Audio not supported:', error);
       return false;
     }
   }
 
-  playNote(frequency, duration) {
-    if (!this.audioContext || frequency === 0) return;
-
-    // Create oscillator for the note
-    const oscillator = this.audioContext.createOscillator();
-    const noteGain = this.audioContext.createGain();
+  async start() {
+    if (!this.audio || !this.isInitialized) return;
     
-    oscillator.connect(noteGain);
-    noteGain.connect(this.gainNode);
-    
-    oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
-    oscillator.type = 'square'; // Classic arcade sound
-    
-    // Envelope for smooth attack/decay
-    noteGain.gain.setValueAtTime(0, this.audioContext.currentTime);
-    noteGain.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.01);
-    noteGain.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + duration / 1000);
-    
-    oscillator.start(this.audioContext.currentTime);
-    oscillator.stop(this.audioContext.currentTime + duration / 1000);
-  }
-
-  start() {
-    if (!this.audioContext) return;
-    
-    this.isPlaying = true;
-    this.currentNoteIndex = 0;
-    this.playMelody();
-  }
-
-  stop() {
-    this.isPlaying = false;
-    if (this.noteInterval) {
-      clearTimeout(this.noteInterval);
-      this.noteInterval = null;
+    try {
+      await this.audio.play();
+      this.isPlaying = true;
+    } catch (error) {
+      console.warn('Could not start audio playback:', error);
+      // Browser might require user interaction first
+      this.isPlaying = false;
     }
   }
 
-  playMelody() {
-    if (!this.isPlaying) return;
-
-    const note = this.melody[this.currentNoteIndex];
-    this.playNote(note.freq, note.duration);
-
-    this.noteInterval = setTimeout(() => {
-      this.currentNoteIndex = (this.currentNoteIndex + 1) % this.melody.length;
-      this.playMelody();
-    }, note.duration + 50); // Small gap between notes
+  stop() {
+    if (!this.audio) return;
+    
+    this.audio.pause();
+    this.audio.currentTime = 0; // Reset to beginning
+    this.isPlaying = false;
   }
 
-  toggle() {
+  async toggle() {
     if (this.isPlaying) {
       this.stop();
     } else {
-      this.start();
+      await this.start();
     }
     return this.isPlaying;
   }
@@ -433,13 +394,13 @@ async function initializeAudio() {
     // Handle the toggle
     if (isFirstClick) {
       // Start music on first click
-      pacManAudio.start();
+      await pacManAudio.start();
       musicButton.textContent = '🎵 Music: ON';
       musicButton.classList.remove('music-off');
       isFirstClick = false;
     } else {
       // Toggle music on subsequent clicks
-      const isPlaying = pacManAudio.toggle();
+      const isPlaying = await pacManAudio.toggle();
       
       if (isPlaying) {
         musicButton.textContent = '🎵 Music: ON';
