@@ -1,6 +1,130 @@
+/**
+ * PAC-MAN Game - Canvas-based implementation
+ * 
+ * Game Architecture:
+ * - Grid-based movement system using 2D array representation
+ * - Fixed timestep game loop with requestAnimationFrame
+ * - Entity-based design for PAC-MAN and ghost characters
+ * - Simple collision detection using array bounds checking
+ * - Background music system with Web Audio API
+ */
+
+// Canvas setup and rendering context
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const tileSize = 20;
+
+/**
+ * Audio System - PAC-MAN Theme Music
+ * Uses Web Audio API to generate classic arcade-style sounds
+ */
+class PacManAudio {
+  constructor() {
+    this.audioContext = null;
+    this.oscillator = null;
+    this.gainNode = null;
+    this.isPlaying = false;
+    this.currentNoteIndex = 0;
+    this.noteInterval = null;
+    
+    // Classic PAC-MAN intro theme melody (simplified)
+    // Notes based on the famous "PAC-MAN" jingle
+    this.melody = [
+      { freq: 659.25, duration: 200 }, // E5
+      { freq: 523.25, duration: 200 }, // C5
+      { freq: 659.25, duration: 200 }, // E5
+      { freq: 698.46, duration: 200 }, // F5
+      { freq: 783.99, duration: 400 }, // G5
+      { freq: 698.46, duration: 200 }, // F5
+      { freq: 659.25, duration: 400 }, // E5
+      { freq: 0, duration: 200 },      // Rest
+      { freq: 523.25, duration: 200 }, // C5
+      { freq: 587.33, duration: 200 }, // D5
+      { freq: 659.25, duration: 200 }, // E5
+      { freq: 698.46, duration: 200 }, // F5
+      { freq: 783.99, duration: 600 }, // G5
+      { freq: 0, duration: 400 },      // Rest
+    ];
+  }
+
+  async init() {
+    try {
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Create gain node for volume control
+      this.gainNode = this.audioContext.createGain();
+      this.gainNode.connect(this.audioContext.destination);
+      this.gainNode.gain.value = 0.1; // Low volume
+      
+      return true;
+    } catch (error) {
+      console.warn('Web Audio API not supported:', error);
+      return false;
+    }
+  }
+
+  playNote(frequency, duration) {
+    if (!this.audioContext || frequency === 0) return;
+
+    // Create oscillator for the note
+    const oscillator = this.audioContext.createOscillator();
+    const noteGain = this.audioContext.createGain();
+    
+    oscillator.connect(noteGain);
+    noteGain.connect(this.gainNode);
+    
+    oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+    oscillator.type = 'square'; // Classic arcade sound
+    
+    // Envelope for smooth attack/decay
+    noteGain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    noteGain.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.01);
+    noteGain.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + duration / 1000);
+    
+    oscillator.start(this.audioContext.currentTime);
+    oscillator.stop(this.audioContext.currentTime + duration / 1000);
+  }
+
+  start() {
+    if (!this.audioContext) return;
+    
+    this.isPlaying = true;
+    this.currentNoteIndex = 0;
+    this.playMelody();
+  }
+
+  stop() {
+    this.isPlaying = false;
+    if (this.noteInterval) {
+      clearTimeout(this.noteInterval);
+      this.noteInterval = null;
+    }
+  }
+
+  playMelody() {
+    if (!this.isPlaying) return;
+
+    const note = this.melody[this.currentNoteIndex];
+    this.playNote(note.freq, note.duration);
+
+    this.noteInterval = setTimeout(() => {
+      this.currentNoteIndex = (this.currentNoteIndex + 1) % this.melody.length;
+      this.playMelody();
+    }, note.duration + 50); // Small gap between notes
+  }
+
+  toggle() {
+    if (this.isPlaying) {
+      this.stop();
+    } else {
+      this.start();
+    }
+    return this.isPlaying;
+  }
+}
+
+// Initialize audio system
+const pacManAudio = new PacManAudio();
 
 // 0 - empty, 1 - wall (dots will be added dynamically)
 const levelLayout = [
@@ -285,5 +409,50 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowDown') pacman.dir = { x: 0, y: 1 };
 });
 
+/**
+ * Music Toggle System
+ * Initialize audio and set up toggle button functionality
+ */
+async function initializeAudio() {
+  const musicButton = document.getElementById('musicToggle');
+  let audioInitialized = false;
+  let isFirstClick = true;
+  
+  musicButton.addEventListener('click', async () => {
+    // Initialize audio on first user interaction (browser requirement)
+    if (!audioInitialized) {
+      audioInitialized = await pacManAudio.init();
+      
+      if (!audioInitialized) {
+        musicButton.textContent = '🔇 Audio Not Available';
+        musicButton.disabled = true;
+        return;
+      }
+    }
+    
+    // Handle the toggle
+    if (isFirstClick) {
+      // Start music on first click
+      pacManAudio.start();
+      musicButton.textContent = '🎵 Music: ON';
+      musicButton.classList.remove('music-off');
+      isFirstClick = false;
+    } else {
+      // Toggle music on subsequent clicks
+      const isPlaying = pacManAudio.toggle();
+      
+      if (isPlaying) {
+        musicButton.textContent = '🎵 Music: ON';
+        musicButton.classList.remove('music-off');
+      } else {
+        musicButton.textContent = '🔇 Music: OFF';
+        musicButton.classList.add('music-off');
+      }
+    }
+  });
+}
+
+// Initialize the game
 draw();
+initializeAudio();
 requestAnimationFrame(update);
