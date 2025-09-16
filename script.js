@@ -10,7 +10,7 @@
  */
 
 // Canvas setup and rendering context
-const canvas = document.getElementById('game');
+const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game'));
 const ctx = canvas.getContext('2d');
 const tileSize = 20; // Size of each grid tile in pixels
 
@@ -23,6 +23,7 @@ class PacManAudio {
     this.audio = null;
     this.isPlaying = false;
     this.isInitialized = false;
+    this.inChase = false;
   }
 
   async init() {
@@ -31,19 +32,19 @@ class PacManAudio {
       this.audio = new Audio('playing-pac-man-6783.mp3');
       this.audio.loop = true; // Enable continuous looping
       this.audio.volume = 0.3; // Set moderate volume
-      
+
       // Handle audio loading
       return new Promise((resolve) => {
         this.audio.addEventListener('canplaythrough', () => {
           this.isInitialized = true;
           resolve(true);
         });
-        
+
         this.audio.addEventListener('error', (e) => {
           console.warn('Error loading PAC-MAN theme music:', e);
           resolve(false);
         });
-        
+
         // Start loading the audio
         this.audio.load();
       });
@@ -55,7 +56,7 @@ class PacManAudio {
 
   async start() {
     if (!this.audio || !this.isInitialized) return;
-    
+
     try {
       await this.audio.play();
       this.isPlaying = true;
@@ -68,10 +69,12 @@ class PacManAudio {
 
   stop() {
     if (!this.audio) return;
-    
+
     this.audio.pause();
     this.audio.currentTime = 0; // Reset to beginning
     this.isPlaying = false;
+    this.inChase = false;
+    if (this.audio) this.audio.playbackRate = 1.0;
   }
 
   async toggle() {
@@ -81,6 +84,17 @@ class PacManAudio {
       await this.start();
     }
     return this.isPlaying;
+  }
+
+  setChase(active) {
+    if (!this.audio) return;
+    if (active && !this.inChase) {
+      this.audio.playbackRate = 1.35; // speed up to indicate danger
+      this.inChase = true;
+    } else if (!active && this.inChase) {
+      this.audio.playbackRate = 1.0; // normal speed
+      this.inChase = false;
+    }
   }
 }
 
@@ -129,35 +143,35 @@ function canTeleportOnRow(y) {
 // Flood fill algorithm to find all reachable positions
 function floodFillReachable(startX, startY) {
   const reachable = Array(rows).fill().map(() => Array(cols).fill(false));
-  const stack = [{x: startX, y: startY}];
-  
+  const stack = [{ x: startX, y: startY }];
+
   while (stack.length > 0) {
-    const {x, y} = stack.pop();
-    
+    const { x, y } = stack.pop();
+
     // Skip if out of bounds, already visited, or a wall
     if (y < 0 || y >= rows || x < 0 || x >= cols || reachable[y][x] || level[y][x] === '1') {
       continue;
     }
-    
+
     reachable[y][x] = true;
-    
+
     // Add adjacent cells
-    stack.push({x: x + 1, y: y});
-    stack.push({x: x - 1, y: y});
-    stack.push({x: x, y: y + 1});
-    stack.push({x: x, y: y - 1});
-    
+    stack.push({ x: x + 1, y: y });
+    stack.push({ x: x - 1, y: y });
+    stack.push({ x: x, y: y + 1 });
+    stack.push({ x: x, y: y - 1 });
+
     // Handle teleportation - if we can teleport on this row
     if (canTeleportOnRow(y)) {
       if (x === 0) {
-        stack.push({x: cols - 1, y: y}); // Can reach right edge from left edge
+        stack.push({ x: cols - 1, y: y }); // Can reach right edge from left edge
       }
       if (x === cols - 1) {
-        stack.push({x: 0, y: y}); // Can reach left edge from right edge
+        stack.push({ x: 0, y: y }); // Can reach left edge from right edge
       }
     }
   }
-  
+
   return reachable;
 }
 
@@ -178,22 +192,37 @@ for (let y = 0; y < rows; y++) {
  * Uses object-based entities with position and direction vectors
  * Direction vectors: {x: 1, y: 0} = right, {x: -1, y: 0} = left, etc.
  */
-let pacman = { 
-  x: 1, 
-  y: 1, 
+let pacman = {
+  x: 1,
+  y: 1,
   dir: { x: 0, y: 0 } // Initially stationary
 };
 
-let ghost = { 
-  x: cols - 2, 
-  y: rows - 2, 
-  dir: { x: 0, y: -1 } // Initially moving up
+let ghost = {
+  x: cols - 2,
+  y: rows - 2,
+  dir: { x: 0, y: -1 }, // Initially moving up
+  mode: 'scatter' // 'scatter' | 'chase'
 };
 
 // Game state variables
 let score = 0;
 let lastTime = 0;
 const GAME_SPEED = 150; // milliseconds between moves (controls game difficulty)
+
+// Ghost mode timing (rough approximation of original pattern but simplified)
+let ghostModeTimer = 0; // accumulates elapsed ms
+let currentModeDuration = 7000; // start with scatter 7s
+function switchGhostMode() {
+  if (ghost.mode === 'scatter') {
+    ghost.mode = 'chase';
+    currentModeDuration = 20000; // chase for 20s
+  } else {
+    ghost.mode = 'scatter';
+    currentModeDuration = 7000; // scatter 7s
+  }
+  ghostModeTimer = 0;
+}
 
 /**
  * Clear Starting Positions
@@ -218,24 +247,24 @@ function draw() {
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       const cell = level[y][x];
-      
+
       // Draw walls with blue color
       if (cell === '1') {
         ctx.fillStyle = '#0031ff';
         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-      } 
+      }
       // Draw empty spaces and dots with black background
       else if (cell === '0' || cell === '2') {
         ctx.fillStyle = 'black';
         ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-        
+
         // Draw collectible dots as small white circles
         if (cell === '2') {
           ctx.fillStyle = 'white';
           ctx.beginPath();
           ctx.arc(
-            x * tileSize + tileSize / 2, 
-            y * tileSize + tileSize / 2, 
+            x * tileSize + tileSize / 2,
+            y * tileSize + tileSize / 2,
             3, 0, Math.PI * 2
           );
           ctx.fill();
@@ -252,74 +281,74 @@ function draw() {
   ctx.fillStyle = 'yellow';
   ctx.beginPath();
   ctx.arc(
-    pacman.x * tileSize + tileSize / 2, 
-    pacman.y * tileSize + tileSize / 2, 
-    tileSize / 2 - 2, 
+    pacman.x * tileSize + tileSize / 2,
+    pacman.y * tileSize + tileSize / 2,
+    tileSize / 2 - 2,
     0.25 * Math.PI, 1.75 * Math.PI // Creates pac-man mouth opening
   );
   ctx.lineTo(pacman.x * tileSize + tileSize / 2, pacman.y * tileSize + tileSize / 2);
   ctx.fill();
 
-function drawGhost(x, y) {
-  const centerX = x * tileSize + tileSize / 2;
-  const centerY = y * tileSize + tileSize / 2;
-  const radius = tileSize / 2 - 2;
-  
-  ctx.fillStyle = 'red';
-  
-  // Draw ghost body (rounded top, wavy bottom)
-  ctx.beginPath();
-  
-  // Top half circle
-  ctx.arc(centerX, centerY - 2, radius - 2, Math.PI, 0, false);
-  
-  // Side walls
-  ctx.lineTo(centerX + radius - 2, centerY + radius - 4);
-  
-  // Wavy bottom
-  const waveWidth = (radius - 2) * 2 / 3;
-  ctx.lineTo(centerX + waveWidth / 2, centerY + radius - 6);
-  ctx.lineTo(centerX, centerY + radius - 2);
-  ctx.lineTo(centerX - waveWidth / 2, centerY + radius - 6);
-  ctx.lineTo(centerX - radius + 2, centerY + radius - 4);
-  
-  ctx.closePath();
-  ctx.fill();
-  
-  // Draw eyes
-  ctx.fillStyle = 'white';
-  const eyeRadius = 2;
-  const eyeOffsetX = 4;
-  const eyeOffsetY = 3;
-  
-  // Left eye
-  ctx.beginPath();
-  ctx.arc(centerX - eyeOffsetX, centerY - eyeOffsetY, eyeRadius, 0, Math.PI * 2);
-  ctx.fill();
-  
-  // Right eye
-  ctx.beginPath();
-  ctx.arc(centerX + eyeOffsetX, centerY - eyeOffsetY, eyeRadius, 0, Math.PI * 2);
-  ctx.fill();
-  
-  // Eye pupils
-  ctx.fillStyle = 'black';
-  const pupilRadius = 1;
-  
-  // Left pupil
-  ctx.beginPath();
-  ctx.arc(centerX - eyeOffsetX, centerY - eyeOffsetY, pupilRadius, 0, Math.PI * 2);
-  ctx.fill();
-  
-  // Right pupil
-  ctx.beginPath();
-  ctx.arc(centerX + eyeOffsetX, centerY - eyeOffsetY, pupilRadius, 0, Math.PI * 2);
-  ctx.fill();
-}
+  function drawGhost(x, y) {
+    const centerX = x * tileSize + tileSize / 2;
+    const centerY = y * tileSize + tileSize / 2;
+    const radius = tileSize / 2 - 2;
+
+    ctx.fillStyle = 'red';
+
+    // Draw ghost body (rounded top, wavy bottom)
+    ctx.beginPath();
+
+    // Top half circle
+    ctx.arc(centerX, centerY - 2, radius - 2, Math.PI, 0, false);
+
+    // Side walls
+    ctx.lineTo(centerX + radius - 2, centerY + radius - 4);
+
+    // Wavy bottom
+    const waveWidth = (radius - 2) * 2 / 3;
+    ctx.lineTo(centerX + waveWidth / 2, centerY + radius - 6);
+    ctx.lineTo(centerX, centerY + radius - 2);
+    ctx.lineTo(centerX - waveWidth / 2, centerY + radius - 6);
+    ctx.lineTo(centerX - radius + 2, centerY + radius - 4);
+
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw eyes
+    ctx.fillStyle = 'white';
+    const eyeRadius = 2;
+    const eyeOffsetX = 4;
+    const eyeOffsetY = 3;
+
+    // Left eye
+    ctx.beginPath();
+    ctx.arc(centerX - eyeOffsetX, centerY - eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Right eye
+    ctx.beginPath();
+    ctx.arc(centerX + eyeOffsetX, centerY - eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eye pupils
+    ctx.fillStyle = 'black';
+    const pupilRadius = 1;
+
+    // Left pupil
+    ctx.beginPath();
+    ctx.arc(centerX - eyeOffsetX, centerY - eyeOffsetY, pupilRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Right pupil
+    ctx.beginPath();
+    ctx.arc(centerX + eyeOffsetX, centerY - eyeOffsetY, pupilRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // Draw ghost
   drawGhost(ghost.x, ghost.y);
-  
+
   /**
    * UI Rendering Pass
    * Draws score and other interface elements on top of game world
@@ -340,7 +369,7 @@ function move(entity) {
   // Calculate next position based on current direction
   const nextX = entity.x + entity.dir.x;
   const nextY = entity.y + entity.dir.y;
-  
+
   // Handle horizontal teleportation
   if (entity.dir.x !== 0) { // Moving horizontally
     if (nextX < 0) {
@@ -359,7 +388,7 @@ function move(entity) {
       }
     }
   }
-  
+
   // Check bounds and walls
   if (nextY >= 0 && nextY < rows && nextX >= 0 && nextX < cols && level[nextY][nextX] !== '1') {
     entity.x = nextX;
@@ -368,6 +397,41 @@ function move(entity) {
     // Invalid move: stop entity movement
     entity.dir = { x: 0, y: 0 };
   }
+}
+
+// Compute next direction for ghost to move toward Pac-Man using BFS (grid-based shortest path)
+function computeChaseDirection() {
+  const start = { x: ghost.x, y: ghost.y };
+  const target = { x: pacman.x, y: pacman.y };
+  if (start.x === target.x && start.y === target.y) return { x: 0, y: 0 };
+
+  const visited = Array(rows).fill().map(() => Array(cols).fill(false));
+  const queue = [];
+  queue.push({ x: start.x, y: start.y, firstDir: null });
+  visited[start.y][start.x] = true;
+  const dirs = [
+    { x: 1, y: 0 },
+    { x: -1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 0, y: -1 }
+  ];
+  while (queue.length) {
+    const node = queue.shift();
+    for (const dir of dirs) {
+      const nx = node.x + dir.x;
+      const ny = node.y + dir.y;
+      if (ny < 0 || ny >= rows || nx < 0 || nx >= cols) continue;
+      if (level[ny][nx] === '1') continue;
+      if (visited[ny][nx]) continue;
+      visited[ny][nx] = true;
+      const firstDir = node.firstDir || dir; // Propagate initial direction
+      if (nx === target.x && ny === target.y) {
+        return firstDir; // Found shortest path direction
+      }
+      queue.push({ x: nx, y: ny, firstDir });
+    }
+  }
+  return ghost.dir; // fallback keep current direction
 }
 
 /**
@@ -380,11 +444,33 @@ function move(entity) {
 function update(currentTime) {
   // Throttle updates to fixed timestep based on GAME_SPEED
   if (currentTime - lastTime >= GAME_SPEED) {
+    // Update ghost mode timer
+    ghostModeTimer += (currentTime - lastTime);
+    if (ghostModeTimer >= currentModeDuration) {
+      switchGhostMode();
+    }
+
     /**
      * Entity Movement Phase
      * Move all entities based on their current direction vectors
      */
     move(pacman);
+
+    // Determine ghost direction based on mode
+    if (ghost.mode === 'chase') {
+      const chaseDir = computeChaseDirection();
+      if (chaseDir) ghost.dir = chaseDir;
+    } else {
+      // scatter: occasionally randomize (reuse existing random logic probability later)
+      if (Math.random() < 0.15) {
+        const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
+        const validDirs = dirs.filter(dir => {
+          const nx = ghost.x + dir.x; const ny = ghost.y + dir.y;
+          return ny >= 0 && ny < rows && nx >= 0 && nx < cols && level[ny][nx] !== '1';
+        });
+        if (validDirs.length) ghost.dir = validDirs[Math.floor(Math.random() * validDirs.length)];
+      }
+    }
     move(ghost);
 
     /**
@@ -394,7 +480,7 @@ function update(currentTime) {
     if (level[pacman.y][pacman.x] === '2') {
       level[pacman.y][pacman.x] = '0'; // Remove dot from level
       score += 10; // Award points
-      
+
       /**
        * Win Condition Check
        * Count remaining dots and trigger win state if all collected
@@ -406,45 +492,17 @@ function update(currentTime) {
           if (level[y][x] === '2') dotsRemaining++;
         }
       }
-      
+
       if (dotsRemaining === 0) {
         alert('You Win! Final Score: ' + score);
         document.location.reload(); // Reset game for replay
       }
     }
 
-    /**
-     * Ghost AI System
-     * Simple random direction changes with wall avoidance
-     * 10% chance per frame to change direction (creates unpredictable movement)
-     */
-    if (Math.random() < 0.1) {
-      // All possible movement directions
-      const dirs = [
-        { x: 1, y: 0 },   // Right
-        { x: -1, y: 0 },  // Left
-        { x: 0, y: 1 },   // Down
-        { x: 0, y: -1 }   // Up
-      ];
-      
-      /**
-       * AI Collision Avoidance
-       * Filter out directions that would result in wall collision
-       * Ensures ghost never gets stuck in walls
-       */
-      const validDirs = dirs.filter(dir => {
-        const nextX = ghost.x + dir.x;
-        const nextY = ghost.y + dir.y;
-        return nextY >= 0 && nextY < rows && 
-               nextX >= 0 && nextX < cols && 
-               level[nextY][nextX] !== '1';
-      });
-      
-      // Randomly select from valid directions
-      if (validDirs.length > 0) {
-        ghost.dir = validDirs[Math.floor(Math.random() * validDirs.length)];
-      }
-    }
+    // (Old random ghost AI removed; replaced by chase/scatter logic above)
+
+    // Update audio chase state if playing
+    pacManAudio.setChase(ghost.mode === 'chase');
 
     /**
      * Game Over Collision Detection
@@ -482,22 +540,22 @@ document.addEventListener('keydown', (e) => {
  * Initialize audio and set up toggle button functionality
  */
 async function initializeAudio() {
-  const musicButton = document.getElementById('musicToggle');
+  const musicButton = /** @type {HTMLButtonElement} */ (document.getElementById('musicToggle'));
   let audioInitialized = false;
   let isFirstClick = true;
-  
+
   musicButton.addEventListener('click', async () => {
     // Initialize audio on first user interaction (browser requirement)
     if (!audioInitialized) {
       audioInitialized = await pacManAudio.init();
-      
+
       if (!audioInitialized) {
         musicButton.textContent = '🔇 Audio Not Available';
-        musicButton.disabled = true;
+        musicButton.setAttribute('disabled', 'true');
         return;
       }
     }
-    
+
     // Handle the toggle
     if (isFirstClick) {
       // Start music on first click
@@ -508,7 +566,7 @@ async function initializeAudio() {
     } else {
       // Toggle music on subsequent clicks
       const isPlaying = await pacManAudio.toggle();
-      
+
       if (isPlaying) {
         musicButton.textContent = '🎵 Music: ON';
         musicButton.classList.remove('music-off');
