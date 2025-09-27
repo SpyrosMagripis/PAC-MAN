@@ -1,10 +1,6 @@
 /**
- * Enhanced PAC-MAN Game - Canvas-based implementation
- *
- * Added features:
- * - Authentic four-ghost AI with chase/scatter targets
- * - Distinct frightened mode triggered by power pellets
- * - Layered audio system (theme, chase siren, frightened music)
+ * PAC-MAN implementation with multi-ghost AI, layered audio, frightened mode,
+ * and arcade-style ready prompt.
  */
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game'));
@@ -27,7 +23,7 @@ const DIRECTIONS = [
   { x: 0, y: -1 }
 ];
 
-const GAME_SPEED = 150; // milliseconds between moves
+const GAME_SPEED = 150; // pac-man step duration in ms
 const MODE_SEQUENCE = [
   { mode: 'scatter', duration: 7000 },
   { mode: 'chase', duration: 20000 },
@@ -38,12 +34,10 @@ const MODE_SEQUENCE = [
 ];
 const FRIGHTENED_DURATION = 7000;
 const GHOST_EAT_SCORES = [200, 400, 800, 1600];
+const READY_DISPLAY_DURATION = 3000;
 const GHOST_MOVE_INTERVAL = GAME_SPEED;
 const GHOST_FRIGHTENED_SPEED_MULTIPLIER = 1.6;
 const GHOST_EATEN_SPEED_MULTIPLIER = 0.6;
-const READY_DISPLAY_DURATION = 3000;
-const WIN_RESET_DELAY_MS = 4500;
-const LOSE_RESET_DELAY_MS = 2800;
 
 class PacManAudio {
   constructor() {
@@ -69,8 +63,8 @@ class PacManAudio {
     this.lastDotChomp = 0;
     this.lastCornerTurn = 0;
     this.startFallbackTimer = null;
-    this.handleStartEnded = this.handleStartEnded.bind(this);
     this.effectStopTimers = {};
+    this.handleStartEnded = this.handleStartEnded.bind(this);
   }
 
   createTrack(src, { loop, volume }) {
@@ -379,11 +373,8 @@ function floodFillReachable(startX, startY) {
 const reachableAreas = floodFillReachable(1, 1);
 for (let y = 0; y < rows; y++) {
   for (let x = 0; x < cols; x++) {
-    if (
-      level[y][x] === TILE_TYPES.WALL ||
-      level[y][x] === TILE_TYPES.HOUSE ||
-      level[y][x] === TILE_TYPES.DOOR
-    ) {
+    const tile = level[y][x];
+    if (tile === TILE_TYPES.WALL || tile === TILE_TYPES.HOUSE || tile === TILE_TYPES.DOOR) {
       continue;
     }
     level[y][x] = reachableAreas[y][x] ? TILE_TYPES.DOT : TILE_TYPES.EMPTY;
@@ -488,16 +479,18 @@ const ghosts = ghostConfigs.map((config) => {
     mode: config.initialState === 'pen' ? 'pen' : 'scatter',
     state: config.initialState || 'normal',
     respawnTimer: config.initialTimer || 0,
-    isInHouse:
-      config.startsInHouse ?? (level[config.start.y][config.start.x] === TILE_TYPES.HOUSE),
-    moveAccumulator: 0,
+    isInHouse: config.startsInHouse ?? (level[config.start.y][config.start.x] === TILE_TYPES.HOUSE),
+    moveAccumulator: 0
   };
 
   if (ghost.state === 'pen' && ghost.respawnTimer <= 0) {
     ghost.respawnTimer = 1000;
   }
 
-  if (ghost.state === 'normal' && (level[ghost.y][ghost.x] === TILE_TYPES.HOUSE || level[ghost.y][ghost.x] === TILE_TYPES.DOOR)) {
+  if (
+    ghost.state === 'normal' &&
+    (level[ghost.y][ghost.x] === TILE_TYPES.HOUSE || level[ghost.y][ghost.x] === TILE_TYPES.DOOR)
+  ) {
     ghost.isInHouse = true;
   }
 
@@ -557,7 +550,7 @@ function endGame(type, message) {
     ghost.dir = { x: 0, y: 0 };
     ghost.moveAccumulator = 0;
   });
-  const delay = type === 'win' ? WIN_RESET_DELAY_MS : LOSE_RESET_DELAY_MS;
+  const delay = type === 'win' ? 4500 : 2800;
   scheduleGameReset(message, delay);
 }
 
@@ -578,7 +571,6 @@ function getAheadTarget(distance, applyUpBug) {
   let targetX = pacman.x + dir.x * distance;
   let targetY = pacman.y + dir.y * distance;
   if (applyUpBug && dir.y === -1) {
-    // Mimic original overflow bug pushing target further up and left
     targetX -= 2;
     targetY -= 2;
   }
@@ -670,22 +662,6 @@ function getValidDirections(entity) {
   return DIRECTIONS.filter((dir) => canMoveTo(entity, dir));
 }
 
-function getGhostSpeedMultiplier(ghost) {
-  if (ghost.state === 'frightened') return GHOST_FRIGHTENED_SPEED_MULTIPLIER;
-  if (ghost.state === 'eaten') return GHOST_EATEN_SPEED_MULTIPLIER;
-  return 1;
-}
-
-function shouldGhostMove(ghost, delta) {
-  const required = GHOST_MOVE_INTERVAL * getGhostSpeedMultiplier(ghost);
-  ghost.moveAccumulator = (ghost.moveAccumulator || 0) + delta;
-  if (ghost.moveAccumulator < required) {
-    return false;
-  }
-  ghost.moveAccumulator -= required;
-  return true;
-}
-
 function computeDirectionTowards(entity, target) {
   if (entity.x === target.x && entity.y === target.y) return null;
   const visited = Array(rows)
@@ -734,6 +710,22 @@ function chooseFrightenedDirection(ghost) {
     }
   });
   return best;
+}
+
+function getGhostSpeedMultiplier(ghost) {
+  if (ghost.state === 'frightened') return GHOST_FRIGHTENED_SPEED_MULTIPLIER;
+  if (ghost.state === 'eaten') return GHOST_EATEN_SPEED_MULTIPLIER;
+  return 1;
+}
+
+function shouldGhostMove(ghost, delta) {
+  const required = GHOST_MOVE_INTERVAL * getGhostSpeedMultiplier(ghost);
+  ghost.moveAccumulator += delta;
+  if (ghost.moveAccumulator < required) {
+    return false;
+  }
+  ghost.moveAccumulator -= required;
+  return true;
 }
 
 function updateGhost(ghost, delta) {
@@ -1056,17 +1048,16 @@ function update(currentTime) {
     draw();
     return;
   }
+
   if (currentTime - lastTime >= GAME_SPEED) {
     const delta = currentTime - lastTime;
 
     if (readyTimer > 0) {
       readyTimer = Math.max(0, readyTimer - delta);
       lastTime = currentTime;
-      if (readyTimer > 0) {
-        draw();
-        requestAnimationFrame(update);
-        return;
-      }
+      draw();
+      requestAnimationFrame(update);
+      return;
     }
 
     if (!frightenedActive) {
